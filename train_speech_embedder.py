@@ -17,18 +17,26 @@ from data_load import SpeakerDatasetTIMIT, SpeakerDatasetTIMITPreprocessed
 from speech_embedder_net import SpeechEmbedder, GE2ELoss, get_centroids, get_cossim
 
 def train(model_path):
-    device = torch.device(hp.device)
     
     if hp.data.data_preprocessed:
         train_dataset = SpeakerDatasetTIMITPreprocessed()
     else:
         train_dataset = SpeakerDatasetTIMIT()
-    train_loader = DataLoader(train_dataset, batch_size=hp.train.N, shuffle=True, num_workers=hp.train.num_workers, drop_last=True) 
     
-    embedder_net = SpeechEmbedder().to(device)
+    embedder_net = SpeechEmbedder()
+    ge2e_loss = GE2ELoss()
     if hp.train.restore:
         embedder_net.load_state_dict(torch.load(model_path))
-    ge2e_loss = GE2ELoss(device)
+    
+    if hp.ngpu > 1:
+        embedder_net = torch.nn.DataParallel(embedder_net.cuda(), device_ids=list(range(hp.ngpu)))
+        ge2e_loss = torch.nn.DataParallel(ge2e_loss.cuda(), device_ids=list(range(hp.ngpu)))
+        hp.train.N *= hp.ngpu 
+    train_loader = DataLoader(train_dataset, batch_size=hp.train.N, shuffle=True, num_workers=hp.train.num_workers, drop_last=True) 
+
+    device = torch.device("cuda" if hp.ngpu > 0 else "cpu")
+    # embedder_net = embedder_net.to(device)
+    
     #Both net and loss have trainable parameters
     optimizer = torch.optim.SGD([
                     {'params': embedder_net.parameters()},
@@ -59,6 +67,7 @@ def train(model_path):
             
             #get loss, call backward, step optimizer
             loss = ge2e_loss(embeddings) #wants (Speaker, Utterances, embedding)
+            loss = loss.mean()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(embedder_net.parameters(), 3.0)
             torch.nn.utils.clip_grad_norm_(ge2e_loss.parameters(), 1.0)
@@ -75,17 +84,17 @@ def train(model_path):
                         f.write(mesg)
                     
         if hp.train.checkpoint_dir is not None and (e + 1) % hp.train.checkpoint_interval == 0:
-            embedder_net.eval().cpu()
+            # embedder_net.eval().cpu()
             ckpt_model_filename = "ckpt_epoch_" + str(e+1) + "_batch_id_" + str(batch_id+1) + ".pth"
             ckpt_model_path = os.path.join(hp.train.checkpoint_dir, ckpt_model_filename)
-            torch.save(embedder_net.state_dict(), ckpt_model_path)
-            embedder_net.to(device).train()
+            torch.save(embedder_net.module.state_dict(), ckpt_model_path)
+            # embedder_net.to(device).train()
 
     #save model
     embedder_net.eval().cpu()
     save_model_filename = "final_epoch_" + str(e + 1) + "_batch_id_" + str(batch_id + 1) + ".model"
     save_model_path = os.path.join(hp.train.checkpoint_dir, save_model_filename)
-    torch.save(embedder_net.state_dict(), save_model_path)
+    torch.save(embedder_net.module.state_dict(), save_model_path)
     
     print("\nDone, trained model saved at", save_model_path)
 

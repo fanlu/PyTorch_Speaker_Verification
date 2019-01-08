@@ -34,16 +34,16 @@ class SpeechEmbedder(nn.Module):
 
 class GE2ELoss(nn.Module):
     
-    def __init__(self, device):
+    def __init__(self):
         super(GE2ELoss, self).__init__()
-        self.w = nn.Parameter(torch.tensor(10.0).to(device), requires_grad=True)
-        self.b = nn.Parameter(torch.tensor(-5.0).to(device), requires_grad=True)
-        self.device = device
+        self.w = nn.Parameter(torch.tensor(10.0), requires_grad=True)
+        self.b = nn.Parameter(torch.tensor(-5.0), requires_grad=True)
+        # self.device = device
         
     def forward(self, embeddings):
         torch.clamp(self.w, 1e-6)
         centroids = get_centroids(embeddings)
         cossim = get_cossim(embeddings, centroids)
-        sim_matrix = self.w*cossim.to(self.device) + self.b
-        loss, _ = calc_loss(sim_matrix)
-        return loss
+        sim_matrix = self.w*cossim + self.b
+        loss, per_embedding_loss = calc_loss(sim_matrix)
+        return per_embedding_loss
