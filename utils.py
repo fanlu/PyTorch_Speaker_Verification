@@ -45,6 +45,21 @@ def get_cossim(embeddings, centroids):
                 cossim[speaker_num][utterance_num][centroid_num] = output
     return cossim
 
+def get_cossim2(embeddings, centroids=None):
+    N, M, feature = embeddings.shape
+    if not centroids:
+        center = torch.mean(embeddings, 1)
+        center = center / torch.norm(center)
+
+        center_except = torch.reshape(torch.sum(embeddings, 1, keepdim=True) - embeddings, (N*M, feature))
+        center_except = center_except/torch.norm(center_except)
+
+        cossim = torch.cat([torch.cat([torch.sum(center_except[i*M:(i+1)*M, :]*embeddings[j, :, :], 1, keepdim=True) if i==j else torch.sum(center[i:(i+1),:]*embeddings[j,:,:], 1, keepdim=True) for i in range(N)], 1) for j in range(N)], 0)
+        return cossim
+
+        # torch.cat([torch.cat([torch.sum(center_except[i*5:(i+1)*5, :]*embeddings[j, :, :], 1, keepdim=True) if i==j else torch.sum(center[i:(i+1),:]*embeddings[j,:,:], 1, keepdim=True) for i in range(32)], 1) for j in range(32)], 0)
+
+
 def calc_loss(sim_matrix):
     # Calculates loss from (N, M, K) similarity matrix
     per_embedding_loss = torch.zeros(sim_matrix.size(0), sim_matrix.size(1))
@@ -53,6 +68,12 @@ def calc_loss(sim_matrix):
             per_embedding_loss[j][i] = -(sim_matrix[j][i][j] - ((torch.exp(sim_matrix[j][i]).sum()+1e-6).log_()))
     loss = per_embedding_loss.sum()    
     return loss, per_embedding_loss
+
+def calc_loss2(sim_matrix):
+    N, M, K = sim_matrix.shape
+    S_correct = torch.cat([sim_matrix[i*M:(i+1)*M, i:(i+1)] for i in range(N)], 0)
+    loss = -torch.sum(S_correct - torch.log(tf.sum(tf.exp(sim_matrix), 1, keepdim=True) + 1e-6))
+    return loss
 
 def normalize_0_1(values, max_value, min_value):
     normalized = np.clip((values - min_value) / (max_value - min_value), 0, 1)

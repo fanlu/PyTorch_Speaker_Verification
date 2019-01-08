@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 
 from hparam import hparam as hp
-from utils import get_centroids, get_cossim, calc_loss
+from utils import get_centroids, get_cossim, get_cossim2, calc_loss, calc_loss2
 
 class SpeechEmbedder(nn.Module):
     
@@ -42,8 +42,10 @@ class GE2ELoss(nn.Module):
         
     def forward(self, embeddings):
         torch.clamp(self.w, 1e-6)
-        centroids = get_centroids(embeddings)
-        cossim = get_cossim(embeddings, centroids)
+        # centroids = get_centroids(embeddings)
+        # cossim = get_cossim(embeddings, centroids)
+        cossim = get_cossim2(embeddings, None)
         sim_matrix = self.w*cossim + self.b
-        loss, per_embedding_loss = calc_loss(sim_matrix)
+        # loss, per_embedding_loss = calc_loss(sim_matrix)
+        per_embedding_loss = calc_loss2(sim_matrix)
         return per_embedding_loss
