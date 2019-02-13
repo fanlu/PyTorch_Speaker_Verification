@@ -49,10 +49,10 @@ def get_cossim2(embeddings, centroids=None):
     N, M, feature = embeddings.shape
     if not centroids:
         center = torch.mean(embeddings, 1)
-        center = center / torch.norm(center)
+        center = F.normalize(center, dim=-1, eps=1e-6)
 
         center_except = torch.reshape(torch.sum(embeddings, 1, keepdim=True) - embeddings, (N*M, feature))
-        center_except = center_except/torch.norm(center_except)
+        center_except = F.normalize(center_except, dim=-1, eps=1e-6)
 
         cossim = torch.cat([torch.cat([torch.sum(center_except[i*M:(i+1)*M, :]*embeddings[j, :, :], 1, keepdim=True) if i==j else torch.sum(center[i:(i+1),:]*embeddings[j,:,:], 1, keepdim=True) for i in range(N)], 1) for j in range(N)], 0)
         return cossim
@@ -66,46 +66,63 @@ def calc_loss(sim_matrix):
     for j in range(len(sim_matrix)):
         for i in range(sim_matrix.size(1)):
             per_embedding_loss[j][i] = -(sim_matrix[j][i][j] - ((torch.exp(sim_matrix[j][i]).sum()+1e-6).log_()))
-    loss = per_embedding_loss.sum()    
+    loss = per_embedding_loss.sum()
     return loss, per_embedding_loss
 
 def calc_loss2(sim_matrix):
-    N, M, K = sim_matrix.shape
+    NM, N = sim_matrix.shape
+    M = int(NM / N)
     S_correct = torch.cat([sim_matrix[i*M:(i+1)*M, i:(i+1)] for i in range(N)], 0)
-    loss = -torch.sum(S_correct - torch.log(tf.sum(tf.exp(sim_matrix), 1, keepdim=True) + 1e-6))
+    loss = -torch.sum(S_correct - torch.log(torch.sum(torch.exp(sim_matrix), 1, keepdim=True) + 1e-6), 0, keepdim=True)
     return loss
 
 def normalize_0_1(values, max_value, min_value):
     normalized = np.clip((values - min_value) / (max_value - min_value), 0, 1)
     return normalized
 
-def mfccs_and_spec(wav_file, wav_process = False, calc_mfccs=False, calc_mag_db=False):    
+def mfccs_and_spec(wav_file, wav_process = False, calc_mfccs=False, calc_mag_db=False):
     sound_file, _ = librosa.core.load(wav_file, sr=hp.data.sr)
     window_length = int(hp.data.window*hp.data.sr)
     hop_length = int(hp.data.hop*hp.data.sr)
     duration = hp.data.tisv_frame * hp.data.hop + hp.data.window
-    
+
     # Cut silence and fix length
     if wav_process == True:
         sound_file, index = librosa.effects.trim(sound_file, frame_length=window_length, hop_length=hop_length)
         length = int(hp.data.sr * duration)
         sound_file = librosa.util.fix_length(sound_file, length)
-        
+
     spec = librosa.stft(sound_file, n_fft=hp.data.nfft, hop_length=hop_length, win_length=window_length)
     mag_spec = np.abs(spec)
-    
+
     mel_basis = librosa.filters.mel(hp.data.sr, hp.data.nfft, n_mels=hp.data.nmels)
     mel_spec = np.dot(mel_basis, mag_spec)
-    
+
     mag_db = librosa.amplitude_to_db(mag_spec)
     #db mel spectrogram
     mel_db = librosa.amplitude_to_db(mel_spec).T
-    
+
     mfccs = None
     if calc_mfccs:
         mfccs = np.dot(librosa.filters.dct(40, mel_db.shape[0]), mel_db).T
-    
+
     return mfccs, mel_db, mag_db
+
+def filter_bank(wav_file):
+    utter_min_len = (24 * hp.data.hop + hp.data.window) * hp.data.sr
+    utter, sr = librosa.core.load(wav_file, hp.data.sr)
+    intervals = librosa.effects.split(utter, top_db=30)
+    utterances_spec = []
+    for interval in intervals:
+        if (interval[1]-interval[0]) > utter_min_len:           # If partial utterance is sufficient long,
+            utter_part = utter[interval[0]:interval[1]]         # save first and last 180 frames of spectrogram.
+            S = librosa.core.stft(y=utter_part, n_fft=hp.data.nfft,
+                                  win_length=int(hp.data.window * sr), hop_length=int(hp.data.hop * sr))
+            S = np.abs(S) ** 2
+            mel_basis = librosa.filters.mel(sr=hp.data.sr, n_fft=hp.data.nfft, n_mels=hp.data.nmels)
+            S = np.log10(np.dot(mel_basis, S) + 1e-6)           # log mel spectrogram of utterances
+            utterances_spec.append(S)
+    return utterances_spec
 
 if __name__ == "__main__":
     w = grad.Variable(torch.tensor(1.0))

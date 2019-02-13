@@ -86,9 +86,10 @@ train_cluster_id = []
 label = 0
 count = 0
 train_saved = False
+import pdb;pdb.set_trace()
 for i, folder in enumerate(audio_path):
     for file in os.listdir(folder):
-        if file[-4:] == '.wav':
+        if file[-4:] == '.WAV':
             times, segs = VAD_chunk(2, folder+'/'+file)
             if segs == []:
                 print('No voice activity detected')

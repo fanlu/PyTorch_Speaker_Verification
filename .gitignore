@@ -1,0 +1,7 @@
+*.npy
+ckpt*
+*.model
+runs/
+Stats
+*.txt
+__pycache__/

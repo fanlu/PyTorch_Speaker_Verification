@@ -29,7 +29,7 @@ def save_spectrogram_tisv():
         print("%dth speaker processing..."%i)
         utterances_spec = []
         for utter_name in os.listdir(folder):
-            if utter_name[-4:] == '.WAV':
+            if utter_name[-4:] == '.wav':
                 utter_path = os.path.join(folder, utter_name)         # path of each utterance
                 utter, sr = librosa.core.load(utter_path, hp.data.sr)        # load utterance audio
                 intervals = librosa.effects.split(utter, top_db=30)         # voice activity detection

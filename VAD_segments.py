@@ -35,7 +35,7 @@ def read_wave(path, sr):
     assert len(data.shape) == 1
     assert sr in (8000, 16000, 32000, 48000)
     return data, pcm_data
-    
+
 class Frame(object):
     """Represents a "frame" of audio data."""
     def __init__(self, bytes, timestamp, duration):
@@ -128,6 +128,7 @@ def vad_collector(sample_rate, frame_duration_ms,
 
 
 def VAD_chunk(aggressiveness, path):
+    #import pdb;pdb.set_trace()
     audio, byte_audio = read_wave(path, hp.data.sr)
     vad = webrtcvad.Vad(int(aggressiveness))
     frames = frame_generator(20, byte_audio, hp.data.sr)
