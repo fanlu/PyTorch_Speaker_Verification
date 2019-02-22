@@ -5,8 +5,10 @@ import glob
 import os
 import json
 import librosa
+import argparse
 import numpy as np
 import concurrent.futures
+
 from multiprocessing import cpu_count
 from hparam import hparam as hp
 from collections import defaultdict
@@ -76,10 +78,10 @@ def save_spectrogram_tisv():
         #else:
         #    np.save(os.path.join(hp.data.test_path, "speaker%d.npy"%(i-train_speaker_num)), utterances_spec)
 
-def txt_2_dict(txt):
+def txt_2_dict(txt, min_tisv_frame):
     conversations, speakers = defaultdict(list), defaultdict(list)
     txt_content = open(txt).readlines()
-    utter_min_len = (hp.data.min_tisv_frame * hp.data.hop + hp.data.window) * hp.data.sr
+    utter_min_len = (min_tisv_frame * hp.data.hop + hp.data.window) * hp.data.sr
     txt_name = os.path.basename(txt).replace(".txt", "")
     for line in txt_content[1:]:
         try:
@@ -98,15 +100,15 @@ def txt_2_dict(txt):
                     break
             if add_dict and role:
                 #conversations {key: [[u1, path],[u2, path],[u1, path], ...]}
-                conversations[txt_name].append(("%s_%s_%s" % (txt_name, role.replace("顾客", "guke").replace("客服", "kefu"), gender.replace("男", "male").replace("女", "female")), os.path.join(os.path.dirname(txt).replace("lab", "segmented"), "%s_%s.wav" % (txt_name, no))))
+                conversations[txt_name].append(("%s_%s_%s" % (txt_name, role.replace("客户", "guke").replace("顾客", "guke").replace("客服", "kefu"), gender.replace("男", "male").replace("女", "female")), os.path.join(os.path.dirname(txt).replace("lab", "segmented"), "%s_%s.wav" % (txt_name, no))))
                 #wav_paths {u1: [path1, path2, ...]}
-                speakers["%s_%s_%s" % (txt_name, role.replace("顾客", "guke").replace("客服", "kefu"), gender.replace("男", "male").replace("女", "female"))].append(os.path.join(os.path.dirname(txt).replace("lab", "segmented"), "%s_%s.wav" % (txt_name, no)))
+                speakers["%s_%s_%s" % (txt_name, role.replace("客户", "guke").replace("顾客", "guke").replace("客服", "kefu"), gender.replace("男", "male").replace("女", "female"))].append(os.path.join(os.path.dirname(txt).replace("lab", "segmented"), "%s_%s.wav" % (txt_name, no)))
     #print(wav_paths)
     return conversations, speakers
 
-def generate_conversations(paths, conversations_path, speakers_path):
-    conversations_json = open(conversations_path, "w")
-    speakers_json = open(speakers_path, "w")
+def generate_conversations(paths, save_dir, min_tisv_frame):
+    conversations_json = open(os.path.join(save_dir, "conversations_json_%s.txt" % min_tisv_frame), "w")
+    speakers_json = open(os.path.join(save_dir, "speakers_json_%s.txt" % min_tisv_frame), "w")
     all_txt = []
     for path in paths:
         txt_paths = glob.glob(os.path.join(path, "lab/*.txt"))
@@ -114,7 +116,7 @@ def generate_conversations(paths, conversations_path, speakers_path):
         for txt in txt_paths:
             all_txt.append(txt)
     with concurrent.futures.ProcessPoolExecutor(max_workers=cpu_count() - 5) as executor:
-        future_to_f = {executor.submit(txt_2_dict, f): f for f in all_txt}
+        future_to_f = {executor.submit(txt_2_dict, f, min_tisv_frame): f for f in all_txt}
         for future in concurrent.futures.as_completed(future_to_f):
             f = future_to_f[future]
             try:
@@ -129,7 +131,11 @@ def generate_conversations(paths, conversations_path, speakers_path):
     speakers_json.close()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='configurations.')
+    parser.add_argument('--min_tisv_frame', default=24, type=int, help='the minimum of tisv frame')
+    parser.add_argument('--save_dir', default='train_tisv_1900h_json', type=str, help='json file to save')
+    args = parser.parse_args()
     #save_spectrogram_tisv()
-    #generate_conversations(["/opt/cephfs1/asr/database/AM/kefu/kefu_500h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_200h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_122h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_179h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_500h_2/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_400h"], "train_tisv_1900h_json/conversations_json_2.txt")
-    generate_conversations(["/opt/cephfs1/asr/database/AM/kefu/kefu_200h/test/dev/"], "test_tisv_200h/conversations_json.txt", "test_tisv_200h/speakers_json.txt")
+    generate_conversations(["/opt/cephfs1/asr/database/AM/kefu/kefu_500h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_200h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_122h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_179h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_500h_2/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_400h"], args.save_dir, args.min_tisv_frame)
+    #generate_conversations(["/opt/cephfs1/asr/database/AM/kefu/kefu_200h/test/dev/"], "test_tisv_200h/conversations_json_2.txt", "test_tisv_200h/speakers_json_2.txt")
     #generate_speakers(["/opt/cephfs1/asr/database/AM/kefu/kefu_500h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_200h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_122h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_179h/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_500h_2/train", "/opt/cephfs1/asr/database/AM/kefu/kefu_400h"], "train_tisv_1900h_json/conversations_json_2.txt")

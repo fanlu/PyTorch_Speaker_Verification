@@ -108,8 +108,10 @@ def mfccs_and_spec(wav_file, wav_process = False, calc_mfccs=False, calc_mag_db=
 
     return mfccs, mel_db, mag_db
 
-def filter_bank(wav_file):
-    utter_min_len = (24 * hp.data.hop + hp.data.window) * hp.data.sr
+def filter_bank(wav_file, min_tisv_frame=hp.data.min_tisv_frame):
+    #print(min_tisv_frame)
+    utter_min_len = (min_tisv_frame * hp.data.hop + hp.data.window) * hp.data.sr
+    #print(wav_file)
     utter, sr = librosa.core.load(wav_file, hp.data.sr)
     intervals = librosa.effects.split(utter, top_db=30)
     utterances_spec = []

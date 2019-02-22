@@ -90,7 +90,7 @@ class SpeakerDatasetTIMITPreprocessed(Dataset):
         return utterance
 
 class KefuDataset(Dataset):
-    def __init__(self, path, m, shuffle=True):
+    def __init__(self, path, m, min_tisv_frame=hp.data.min_tisv_frame, max_tisv_frame=hp.data.tisv_frame, shuffle=True):
         #if hp.training:
         #    #self.path = hp.data.train_path_unprocessed
         #    self.utterance_number = hp.train.M
@@ -99,6 +99,8 @@ class KefuDataset(Dataset):
         #    self.utterance_number = hp.test.M
         self.utterance_number = m
         self.speakers_list = []
+        self.min_tisv_frame = min_tisv_frame
+        self.max_tisv_frame = max_tisv_frame
         f = open(path, "r")
         for line in f.readlines():
             dic = json.loads(line.strip())
@@ -124,12 +126,12 @@ class KefuDataset(Dataset):
         mel_dbs = []
         for f in wav_files:
             #_, mel_db, _ = mfccs_and_spec(f, wav_process = True)
-            mel_db = filter_bank(f)
+            mel_db = filter_bank(f, self.min_tisv_frame)
             if mel_db:
                 mel_db = random.sample(mel_db, 1)[0]
                 frames = mel_db.shape[1]
-                start = np.random.randint(0, frames-24)
-                end = np.random.randint(start+24, min(frames, start+160))
+                start = np.random.randint(0, frames-self.min_tisv_frame)
+                end = np.random.randint(start+self.min_tisv_frame, min(frames, start+self.max_tisv_frame))
                 mel_dbs.append(np.transpose(mel_db[:, start:end], axes=(1, 0)))
             else:
                 print("wav_file:%s" % f)

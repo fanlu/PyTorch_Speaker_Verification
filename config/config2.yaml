@@ -7,26 +7,27 @@ data:
     train_path: './train_tisv_200h'
     train_path_org: '/opt/cephfs1/asr/database/AM/kefu/kefu_200h/train/'
     train_path_unprocessed: '/mnt/cephfs2/asr/users/fanlu/TIMIT/TRAIN/*/*/*.wav'
-    #train_path_json: './train_tisv_1900h_json/speakers_json_2.txt'
-    train_path_json: './train_tisv_200h_json/speakers_json.txt'
+    train_path_json: './train_tisv_1900h_json/speakers_json_2.txt'
+    #train_path_json: './train_tisv_200h_json/speakers_json.txt'
     test_path: './test_tisv_200h'
     test_path_org: '/opt/cephfs1/asr/database/AM/kefu/kefu_200h/test/dev'
     test_path_unprocessed: '/mnt/cephfs2/asr/users/fanlu/TIMIT/TEST/*/*/*.wav'
-    test_path_json: './test_tisv_200h/speakers_json.txt'
+    test_path_json: './test_tisv_200h/speakers_json_2.txt'
     data_preprocessed: !!bool "true" 
     sr: 8000
     nfft: 512 #For mel spectrogram preprocess
     window: 0.025 #(s)
     hop: 0.01 #(s)
     nmels: 40 #Number of mel energies
-    tisv_frame: 180 #Max number of time steps in input after preprocess
+    tisv_frame: 40 #Max number of time steps in input after preprocess
     min_tisv_frame: 24 #Max number of time steps in input after preprocess
 ---   
 model:
-    hidden: 1024 #Number of LSTM hidden layer units
+    hidden: 768 #Number of LSTM hidden layer units
     num_layer: 3 #Number of LSTM layers
     proj: 256 #Embedding size
-    model_path: './speech_id_checkpoint_200h_6/ckpt_epoch_960_batch_id_1154.pth'
+    #model_path: './speech_id_checkpoint_200h_6/ckpt_epoch_960_batch_id_1154.pth'
+    model_path: './speech_id_checkpoint_1900h_12_768.256_0.01_24_40/ckpt_epoch_80_batch_id_1154.pth'
     #model_path: './speech_id_checkpoint_200h_3/ckpt_epoch_1200_batch_id_193.pth'
     #model_path: './speech_id_checkpoint_200h_3/final_epoch_1950_batch_id_47.model'
     #model_path: './speech_id_checkpoint_200h_2/final_epoch_1950_batch_id_191.model' #Model path for testing, inference, or resuming training
@@ -37,14 +38,14 @@ train:
     num_workers: 24 #number of workers for data laoder
     lr: 0.01 
     lr_schedule:
+        - 80
+        - 100
         - 120
-        - 240
-        - 360
-    epochs: 1200 #Max training speaker epoch 
+    epochs: 200 #Max training speaker epoch 
     log_interval: 30 #Epochs before printing progress
-    log_file: './speech_id_checkpoint_200h_11_1024.256_0.01/Stats'
-    checkpoint_interval: 120 #Save model after x speaker epochs
-    checkpoint_dir: './speech_id_checkpoint_200h_11_1024.256_0.01'
+    log_file: './speech_id_checkpoint_1900h_12_768.256_0.01_24_40/Stats'
+    checkpoint_interval: 10 #Save model after x speaker epochs
+    checkpoint_dir: './speech_id_checkpoint_1900h_12_768.256_0.01_24_40'
     restore: !!bool "false" #Resume training from previous model path
 ---
 test:

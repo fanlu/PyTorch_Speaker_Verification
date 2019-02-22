@@ -16,6 +16,7 @@ import numpy as np
 import os
 import torch
 import json
+import argparse
 
 from collections import defaultdict
 from hparam import hparam as hp
@@ -74,7 +75,7 @@ def align_embeddings(embeddings):
         avg_embeddings[i] = np.average(embeddings[partition[0]:partition[1]],axis=0)
     return avg_embeddings
 
-def generate_dvector(path, save_path):
+def generate_dvector(path, save_path, model_path):
     #dataset path
     txt_path = glob.glob(os.path.join(path, "lab/*.txt"))
     wav_paths = []
@@ -96,17 +97,17 @@ def generate_dvector(path, save_path):
     # train_speaker_num= (total_speaker_num//10)*9            # split total data 90% train and 10% test
 
     embedder_net = SpeechEmbedder()
-    embedder_net.load_state_dict(torch.load(hp.model.model_path))
+    embedder_net.load_state_dict(torch.load(model_path))
     embedder_net.cuda()
     embedder_net.eval()
     conversations_json = open('./train_tisv_1900h_json/conversations_json_2.txt').readlines()
     count = 0
     # for i, folder in enumerate(audio_path):
-    for i, (key, value) in enumerate(txt_wavs.items()):
-    #for i, line in enumerate(conversations_json):
-        #line_json = json.loads(line)
-        #key = line_json['conversation']
-        #value = line_json['wav_files']
+    #for i, (key, value) in enumerate(txt_wavs.items()):
+    for i, line in enumerate(conversations_json):
+        line_json = json.loads(line)
+        key = line_json['conversation']
+        value = line_json['wav_files']
         train_sequence = []
         train_cluster_id = []
         #import pdb;pdb.set_trace()
@@ -129,7 +130,7 @@ def generate_dvector(path, save_path):
                     train_cluster_id.append(str(k))
                 count = count + 1
         if (i+1) % 100 == 0:
-            print('Processed {0}/{1} files'.format(i, len(txt_wavs.keys())))
+            print('Processed {0}/{1} files'.format(i, len(conversations_json)))
 
         train_sequence = np.concatenate(train_sequence,axis=0)
         train_cluster_id = np.asarray(train_cluster_id)
@@ -139,6 +140,12 @@ def generate_dvector(path, save_path):
         np.save('%s_cluster_id_%s' % (save_path, key), train_cluster_id)
 
 if __name__ == "__main__":
-    generate_dvector(hp.data.train_path_org, 'dvector_data_6_960/train')
-    generate_dvector(hp.data.test_path_org, 'dvector_data_6_960/test')
+    import pdb;pdb.set_trace()
+    parser = argparse.ArgumentParser(description='configurations.')
+    parser.add_argument('--save_dir', default='', type=str, help='dvector save dir')
+    parser.add_argument('--model', default=hp.model.model_path, type=str, help='which model will be load')
+    args = parser.parse_args()
+    if args.save_dir:
+        generate_dvector(hp.data.train_path_org, os.path.join(args.save_dir, "train"), args.model) #'dvector_data_1900h_12_768.256_0.01_24_40_epoch_80_conversations2/train')
+        generate_dvector(hp.data.test_path_org, os.path.join(args.save_dir, "test"), args.model) #'dvector_data_1900h_12_768.256_0.01_24_40_epoch_80_conversations2/test')
 
