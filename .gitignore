@@ -2,6 +2,7 @@
 ckpt*
 *.model
 runs/
+exp/
 Stats
 *.txt
 __pycache__/

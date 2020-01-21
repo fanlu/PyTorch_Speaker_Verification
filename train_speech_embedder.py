@@ -49,15 +49,17 @@ def train(model_path, train_path_json, min_tisv_frame, max_tisv_frame, ckpt_dir,
                     {'params': embedder_net.parameters()},
                     {'params': ge2e_loss.parameters()}
                 ], lr=hp.train.lr)
-    scheduler = MultiStepLR(optimizer, milestones=hp.train.lr_schedule, gamma=0.1)
+    #scheduler = MultiStepLR(optimizer, milestones=hp.train.lr_schedule, gamma=0.1)
 
     os.makedirs(ckpt_dir, exist_ok=True)
+    with open(os.path.join(ckpt_dir, "Stats"),'a') as f:
+        print("model structure:", embedder_net, file=f)
 
     embedder_net.train()
     iteration = 0
     #import pdb;pdb.set_trace()
     for e in range(hp.train.epochs):
-        scheduler.step()
+        #scheduler.step()
         print("epochs:%s, lr is:%s" % (e, optimizer.param_groups[0]['lr']))
         writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], iteration)
         total_loss = 0
@@ -101,7 +103,7 @@ def train(model_path, train_path_json, min_tisv_frame, max_tisv_frame, ckpt_dir,
         if ckpt_dir is not None and (e + 1) % hp.train.checkpoint_interval == 0:
             #embedder_net.eval().cpu()
             #import pdb;pdb.set_trace()
-            ckpt_model_filename = "ckpt_epoch_" + str(e+1) + "_batch_id_" + str(batch_id+1) + ".pth"
+            ckpt_model_filename = "ckpt_epoch_%04d_batch_id_%05d.pth" % (e+1, batch_id+1)
             ckpt_model_path = os.path.join(ckpt_dir, ckpt_model_filename)
             torch.save(embedder_net.module.state_dict(), ckpt_model_path)
             avg_ERR = test(embedder_net.module)
@@ -110,13 +112,13 @@ def train(model_path, train_path_json, min_tisv_frame, max_tisv_frame, ckpt_dir,
 
     #save model
     embedder_net.eval().cpu()
-    save_model_filename = "final_epoch_" + str(e + 1) + "_batch_id_" + str(batch_id + 1) + ".model"
+    save_model_filename = "ckpt_epoch_%04d_batch_id_%05d.model" % (e+1, batch_id+1)
     save_model_path = os.path.join(ckpt_dir, save_model_filename)
     torch.save(embedder_net.module.state_dict(), save_model_path)
 
     print("\nDone, trained model saved at", save_model_path)
 
-def test(model, test_path_json=hp.data.test_path_json, min_tisv_frame=hp.data.min_tisv_frame, max_tisv_frame=hp.data.tisv_frame):
+def test(model, test_path_json=hp.data.test_path_json, min_tisv_frame=hp.data.min_tisv_frame, max_tisv_frame=hp.data.tisv_frame, bidirectional=False):
 
     #if hp.data.data_preprocessed:
     #    test_dataset = SpeakerDatasetTIMITPreprocessed()
@@ -127,7 +129,7 @@ def test(model, test_path_json=hp.data.test_path_json, min_tisv_frame=hp.data.mi
     test_loader = DataLoader(test_dataset, batch_size=hp.test.N, shuffle=True, num_workers=hp.test.num_workers, drop_last=True, collate_fn=collate_fn)
 
     if not isinstance(model, SpeechEmbedder2):
-        embedder_net = SpeechEmbedder2()
+        embedder_net = SpeechEmbedder2(bidirectional=bidirectional)
         embedder_net.load_state_dict(torch.load(model))
     else:
         embedder_net = model
@@ -205,9 +207,11 @@ if __name__=="__main__":
     parser.add_argument('--training', default=True, type=bool, help='is training')
     parser.add_argument('--dropout', default=0.0, type=float, help='the dropout of lstm')
     parser.add_argument('--bidirectional', default=False, type=bool, help='the bidirectional of lstm')
+    parser.add_argument('--lr_schedule', nargs='*', default=hp.train.lr_schedule)
     args = parser.parse_args()
+
     if args.training:
         train(hp.model.model_path, args.train_path_json, args.min_tisv_frame, args.max_tisv_frame, args.ckpt_dir, bidirectional=args.bidirectional, dropout=args.dropout)
     else:
-        for i in glob.glob("%s/ckpt*_[1-9]0*" % args.ckpt_dir):
-            test(i, args.test_path_json, args.min_tisv_frame, args.max_tisv_frame)
+        for i in glob.glob("%s/ckpt*_1[2-5]0*" % args.ckpt_dir):
+            test(i, args.test_path_json, args.min_tisv_frame, args.max_tisv_frame, bidirectional=args.bidirectional)

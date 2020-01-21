@@ -50,9 +50,8 @@ class SpeechEmbedder2(nn.Module):
           elif 'weight' in name:
              nn.init.xavier_normal_(param)
         self.bidirectional = bidirectional
-        if self.bidirectional:
-            hp.model.hidden *= 2
-        self.projection = nn.Linear(hp.model.hidden, hp.model.proj)
+        self.projection_hidden = hp.model.hidden * 2 if self.bidirectional else hp.model.hidden
+        self.projection = nn.Linear(self.projection_hidden, hp.model.proj)
 
     def forward(self, x, x_len):
         #import pdb;pdb.set_trace()
@@ -82,6 +81,37 @@ class SpeechEmbedder2(nn.Module):
         #print("--------", x.shape)
         return x
 
+class TDNNStack(nn.Module):
+    def __init__(self,input_dim, nndef, dropout, use_SE=False, SE_ratio=4, use_selu=False):
+        super(TDNNStack, self).__init__()
+        self.input_dim = input_dim
+        model_list = OrderedDict()
+        ly = 0
+        for item in nndef.split("."):
+            out_dim, k_size, dilation = [ int(x) for x in item.split("_")]
+            model_list["TDNN%d"%ly] = nn.Conv1d(input_dim, out_dim, k_size, dilation=dilation)
+            if use_selu:
+                model_list["SeLU%d"%ly] = nn.SELU()
+            else:
+                model_list["ReLU%d"%ly] = nn.ReLU()
+                model_list["batch_norm%d"%ly] = nn.BatchNorm1d(out_dim)
+            if use_SE:
+                model_list["SEnet%d"%ly] = SquExiNet(out_dim, SE_ratio)
+            if dropout != 0.0:
+                model_list['dropout%d'%ly] = nn.Dropout(dropout)
+            input_dim = out_dim
+            ly = ly + 1
+        self.model = nn.Sequential(model_list)
+        self.output_dim = input_dim
+
+    def forward(self, input):
+        #input: seqLength X batchSize X dim
+        #output: seqLength X batchSize X dim (similar to lstm)
+        input = input.contiguous().transpose(0,1).transpose(1,2) #batchSize, dim, seqLength
+        output = self.model(input)
+        output = output.contiguous().transpose(1,2).transpose(0,1) #seqLength, batchSize, dim
+        return output
+
 class GE2ELoss(nn.Module):
 
     def __init__(self):
@@ -102,3 +132,52 @@ class GE2ELoss(nn.Module):
         per_embedding_loss = calc_loss2(sim_matrix)
         #print("=====", per_embedding_loss.shape)
         return per_embedding_loss
+
+class localatt(nn.Module):
+    def __init__(self, featdim, nhid, ncell, nout):
+        super(localatt, self).__init__()
+
+        self.featdim = featdim
+        self.nhid = nhid
+        self.fc1 = nn.Linear(featdim, nhid)
+        self.fc2 = nn.Linear(nhid, nhid)
+        self.do2 = nn.Dropout()
+
+
+        self.blstm = tc.nn.LSTM(nhid, ncell, 1,
+                batch_first=True,
+                dropout=0.5,
+                bias=True,
+                bidirectional=True)
+
+        self.u = nn.Parameter(tc.zeros((ncell*2,)))
+        # self.u = Variable(tc.zeros((ncell*2,)))
+
+        self.fc3 = nn.Linear(ncell*2, nout)
+
+        self.apply(init_linear)
+
+    def forward(self, inputs_lens_tuple):
+
+        inputs = Variable(inputs_lens_tuple[0])
+        batch_size = inputs.size()[0]
+        lens = list(inputs_lens_tuple[1])
+
+        indep_feats = inputs.view(-1, self.featdim) # reshape(batch)
+
+        indep_feats = F.relu(self.fc1(indep_feats))
+
+        indep_feats = F.relu(self.do2(self.fc2(indep_feats)))
+
+        batched_feats = indep_feats.view(batch_size, -1, self.nhid)
+
+        packed = pack_padded_sequence(batched_feats, lens, batch_first=True)
+
+        output, hn = self.blstm(packed)
+
+        padded, lens = pad_packed_sequence(output, batch_first=True, padding_value=0.0)
+
+        alpha = F.softmax(tc.matmul(padded, self.u))
+
+        return F.softmax((self.fc3(tc.sum(tc.matmul(alpha, padded), dim=1))))
+

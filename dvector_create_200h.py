@@ -77,20 +77,20 @@ def align_embeddings(embeddings):
 
 def generate_dvector(path, save_path, model_path):
     #dataset path
-    txt_path = glob.glob(os.path.join(path, "lab/*.txt"))
-    wav_paths = []
-    txt_wavs = defaultdict(list)
-    for txt in txt_path:
-        txt_content = open(txt).readlines()
-        txt_name = os.path.basename(txt).replace(".txt", "")
-        for line in txt_content[1:]:
-            try:
-                no, content, real, role, gender, time = line.split("\t")
-            except:
-                print(txt, line)
-                continue
-            if real == "有效":
-                txt_wavs[txt_name].append(("%s_%s" % (txt_name, role.replace("顾客", "guke").replace("客服", "kefu")), os.path.join(path, "segmented/%s_%s.wav" % (txt_name, no))))
+    #txt_path = glob.glob(os.path.join(path, "lab/*.txt"))
+    #wav_paths = []
+    #txt_wavs = defaultdict(list)
+    #for txt in txt_path:
+    #    txt_content = open(txt).readlines()
+    #    txt_name = os.path.basename(txt).replace(".txt", "")
+    #    for line in txt_content[1:]:
+    #        try:
+    #            no, content, real, role, gender, time = line.split("\t")
+    #        except:
+    #            print(txt, line)
+    #            continue
+    #        if real == "有效":
+    #            txt_wavs[txt_name].append(("%s_%s" % (txt_name, role.replace("顾客", "guke").replace("客服", "kefu")), os.path.join(path, "segmented/%s_%s.wav" % (txt_name, no))))
     #audio_path = glob.glob(os.path.dirname(hp.unprocessed_data))
 
     # total_speaker_num = len(audio_path)
@@ -100,7 +100,7 @@ def generate_dvector(path, save_path, model_path):
     embedder_net.load_state_dict(torch.load(model_path))
     embedder_net.cuda()
     embedder_net.eval()
-    conversations_json = open('./train_tisv_1900h_json/conversations_json_2.txt').readlines()
+    conversations_json = open(path).readlines()
     count = 0
     # for i, folder in enumerate(audio_path):
     #for i, (key, value) in enumerate(txt_wavs.items()):
@@ -140,12 +140,13 @@ def generate_dvector(path, save_path, model_path):
         np.save('%s_cluster_id_%s' % (save_path, key), train_cluster_id)
 
 if __name__ == "__main__":
-    import pdb;pdb.set_trace()
     parser = argparse.ArgumentParser(description='configurations.')
     parser.add_argument('--save_dir', default='', type=str, help='dvector save dir')
-    parser.add_argument('--model', default=hp.model.model_path, type=str, help='which model will be load')
+    parser.add_argument('--model', default=hp.model.model_path, type=str, help='which model will be loaded')
+    parser.add_argument('--conversations_json', default='', type=str, help='which conversations will be converted')
+    parser.add_argument('--train_or_test', default='train', type=str, help='which conversations will be converted')
     args = parser.parse_args()
     if args.save_dir:
-        generate_dvector(hp.data.train_path_org, os.path.join(args.save_dir, "train"), args.model) #'dvector_data_1900h_12_768.256_0.01_24_40_epoch_80_conversations2/train')
-        generate_dvector(hp.data.test_path_org, os.path.join(args.save_dir, "test"), args.model) #'dvector_data_1900h_12_768.256_0.01_24_40_epoch_80_conversations2/test')
+        generate_dvector(args.conversations_json, os.path.join(args.save_dir, args.train_or_test), args.model) #'dvector_data_1900h_12_768.256_0.01_24_40_epoch_80_conversations2/train')
+        #generate_dvector(hp.data.test_path_org, os.path.join(args.save_dir, "test"), args.model) #'dvector_data_1900h_12_768.256_0.01_24_40_epoch_80_conversations2/test')
 
